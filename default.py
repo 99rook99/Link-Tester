@@ -149,12 +149,18 @@ def play_link(link):
         return False
     log_utils.log('Link Supported: |%s|' % (link), log_utils.LOGDEBUG)
 
-    stream_url = hmf.resolve()
-    if not stream_url or not isinstance(stream_url, basestring):
-        try: msg = stream_url.msg
+    try:
+        stream_url = hmf.resolve()
+        if not stream_url or not isinstance(stream_url, basestring):
+            try: msg = stream_url.msg
+            except: msg = link
+            raise Exception(msg)
+    except Exception as e:
+        try: msg = str(e)
         except: msg = link
         kodi.notify('Resolve Failed: %s' % (msg), duration=7500)
         return False
+        
     log_utils.log('Link Resolved: |%s|%s|' % (link, stream_url), log_utils.LOGDEBUG)
         
     listitem = xbmcgui.ListItem(path=stream_url)
