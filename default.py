@@ -146,6 +146,7 @@ def play_link(link):
     hmf = urlresolver.HostedMediaFile(url=link)
     if not hmf:
         log_utils.log('Indirect hoster_url not supported by urlresolver: %s' % (link))
+        kodi.notify('Link Not Supported: %s' % (link), duration=7500)
         return False
     log_utils.log('Link Supported: |%s|' % (link), log_utils.LOGDEBUG)
 
