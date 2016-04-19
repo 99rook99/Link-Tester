@@ -66,6 +66,7 @@ def end_of_directory(cache_to_disc=True):
 
 def create_item(queries, label, thumb='', fanart='', is_folder=None, is_playable=None, total_items=0, menu_items=None, replace_menu=False):
     list_item = xbmcgui.ListItem(label, iconImage=thumb, thumbnailImage=thumb)
+    list_item.addStreamInfo('video', {})
     add_item(queries, list_item, fanart, is_folder, is_playable, total_items, menu_items, replace_menu)
 
 def add_item(queries, list_item, fanart='', is_folder=None, is_playable=None, total_items=0, menu_items=None, replace_menu=False):
