@@ -55,6 +55,7 @@ def main_menu():
                 menu_items.append(('Edit Link', 'RunPlugin(%s)' % (kodi.get_plugin_url(queries))),)
                 kodi.create_item({'mode': MODES.PLAY_LINK, 'link': link}, label, is_folder=False, is_playable=True, menu_items=menu_items)
     
+    kodi.set_content('files')
     kodi.end_of_directory(cache_to_disc=False)
 
 @url_dispatcher.register(MODES.ADD_LINK)

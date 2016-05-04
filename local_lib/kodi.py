@@ -1,5 +1,5 @@
 """
-    Link Tester XBMC Addon
+    SALTS XBMC Addon
     Copyright (C) 2015 tknorris
 
     This program is free software: you can redistribute it and/or modify
@@ -25,21 +25,32 @@ import urlparse
 import sys
 import os
 import re
+import json
 
 addon = xbmcaddon.Addon()
-ICON_PATH = os.path.join(addon.getAddonInfo('path'), 'icon.png')
-
 get_setting = addon.getSetting
 show_settings = addon.openSettings
+sleep = xbmc.sleep
+__log = xbmc.log
+
+def execute_jsonrpc(command):
+    if not isinstance(command, basestring):
+        command = json.dumps(command)
+    response = xbmc.executeJSONRPC(command)
+    return json.loads(response)
 
 def get_path():
-    return addon.getAddonInfo('path')
+    return addon.getAddonInfo('path').decode('utf-8')
 
 def get_profile():
-    return addon.getAddonInfo('profile')
+    return addon.getAddonInfo('profile').decode('utf-8')
+
+def translate_path(path):
+    return xbmc.translatePath(path).decode('utf-8')
 
 def set_setting(id, value):
-    addon.setSetting(id, str(value))
+    if not isinstance(value, basestring): value = str(value)
+    addon.setSetting(id, value)
 
 def get_version():
     return addon.getAddonInfo('version')
@@ -64,6 +75,9 @@ def get_plugin_url(queries):
 def end_of_directory(cache_to_disc=True):
     xbmcplugin.endOfDirectory(int(sys.argv[1]), cacheToDisc=cache_to_disc)
 
+def set_content(content):
+    xbmcplugin.setContent(int(sys.argv[1]), content)
+    
 def create_item(queries, label, thumb='', fanart='', is_folder=None, is_playable=None, total_items=0, menu_items=None, replace_menu=False):
     list_item = xbmcgui.ListItem(label, iconImage=thumb, thumbnailImage=thumb)
     add_item(queries, list_item, fanart, is_folder, is_playable, total_items, menu_items, replace_menu)
@@ -83,7 +97,6 @@ def add_item(queries, list_item, fanart='', is_folder=None, is_playable=None, to
     list_item.setInfo('video', {'title': list_item.getLabel()})
     list_item.setProperty('isPlayable', playable)
     list_item.addContextMenuItems(menu_items, replaceItems=replace_menu)
-    list_item.addStreamInfo('video', {})
     xbmcplugin.addDirectoryItem(int(sys.argv[1]), liz_url, list_item, isFolder=is_folder, totalItems=total_items)
 
 def parse_query(query):
@@ -97,13 +110,18 @@ def parse_query(query):
             q[key] = queries[key]
     return q
 
-def notify(header=None, msg='', duration=2000):
+def notify(header=None, msg='', duration=2000, sound=None):
     if header is None: header = get_name()
-    builtin = "XBMC.Notification(%s,%s, %s, %s)" % (header, msg, duration, ICON_PATH)
-    xbmc.executebuiltin(builtin)
-
+    if sound is None: sound = get_setting('mute_notifications') == 'false'
+    icon_path = os.path.join(get_path(), 'icon.png')
+    try:
+        xbmcgui.Dialog().notification(header, msg, icon_path, duration, sound)
+    except:
+        builtin = "XBMC.Notification(%s,%s, %s, %s)" % (header, msg, duration, icon_path)
+        xbmc.executebuiltin(builtin)
+    
 def get_current_view():
-    skinPath = xbmc.translatePath('special://skin/')
+    skinPath = translate_path('special://skin/')
     xml = os.path.join(skinPath, 'addon.xml')
     f = xbmcvfs.File(xml)
     read = f.read()
@@ -119,3 +137,68 @@ def get_current_view():
         views = match.group(1)
         for view in views.split(','):
             if xbmc.getInfoLabel('Control.GetLabel(%s)' % (view)): return view
+
+def refresh_container():
+    xbmc.executebuiltin("XBMC.Container.Refresh")
+    
+def update_container(url):
+    xbmc.executebuiltin('Container.Update(%s)' % (url))
+    
+def get_keyboard(heading, default=''):
+    keyboard = xbmc.Keyboard()
+    keyboard.setHeading(heading)
+    if default: keyboard.setDefault(default)
+    keyboard.doModal()
+    if keyboard.isConfirmed():
+        return keyboard.getText()
+    else:
+        return None
+
+class WorkingDialog(object):
+    def __init__(self):
+        xbmc.executebuiltin('ActivateWindow(busydialog)')
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, type, value, traceback):
+        xbmc.executebuiltin('Dialog.Close(busydialog)')
+
+class ProgressDialog(object):
+    def __init__(self, heading, line1='', line2='', line3='', background=False, active=True):
+        if active:
+            if background:
+                self.pd = xbmcgui.DialogProgressBG()
+                msg = line1 + line2 + line3
+                self.pd.create(heading, msg)
+            else:
+                self.pd = xbmcgui.DialogProgress()
+                self.pd.create(heading, line1, line2, line3)
+            self.background = background
+            self.heading = heading
+            self.pd.update(0)
+        else:
+            self.pd = None
+
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, type, value, traceback):
+        if self.pd is not None:
+            self.pd.close()
+            del self.pd
+    
+    def is_canceled(self):
+        if self.pd is not None and not self.background:
+            return self.pd.iscanceled()
+        else:
+            return False
+        
+    def update(self, percent, line1='', line2='', line3=''):
+        if self.pd is not None:
+            if self.background:
+                msg = line1 + line2 + line3
+                self.pd.update(percent, self.heading, msg)
+            else:
+                self.pd.update(percent, line1, line2, line3)
+                
