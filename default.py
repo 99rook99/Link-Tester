@@ -58,9 +58,16 @@ def main_menu():
     kodi.set_content('files')
     kodi.end_of_directory(cache_to_disc=False)
 
-@url_dispatcher.register(MODES.ADD_LINK)
-def add_link():
-    result = prompt_for_link()
+@url_dispatcher.register(MODES.ADD_LINK, [], ['link', 'name'])
+def add_link(link=None, name=None):
+    if link is None:
+        result = prompt_for_link()
+    else:
+        if name is None:
+            result = (link, )
+        else:
+            result = (link, name)
+            
     if result:
         if not os.path.exists(os.path.dirname(LINK_PATH)):
             os.mkdir(os.path.dirname(LINK_PATH))
@@ -116,24 +123,12 @@ def edit_link(index):
 def prompt_for_link(old_link='', old_name=''):
     if old_link.endswith('\n'): old_link = old_link[:-1]
     if old_name.endswith('\n'): old_name = old_name[:-1]
-    keyboard = xbmc.Keyboard()
-    keyboard.setHeading('Edit Link')
-    keyboard.setDefault(old_link)
-    keyboard.doModal()
-    if keyboard.isConfirmed():
-        new_link = keyboard.getText()
-        if not new_link:
-            return
+    new_link = kodi.get_keyboard('Edit Link', old_link)
+    if new_link is None:
+        return
 
-        keyboard = xbmc.Keyboard()
-        keyboard.setHeading('Enter Name')
-        keyboard.setDefault(old_name)
-        keyboard.doModal()
-        if keyboard.isConfirmed():
-            new_name = keyboard.getText()
-        else:
-            return
-    else:
+    new_name = kodi.get_keyboard('Enter Name', old_name)
+    if new_name is None:
         return
     
     if new_name:
