@@ -58,8 +58,8 @@ def main_menu():
     kodi.set_content('files')
     kodi.end_of_directory(cache_to_disc=False)
 
-@url_dispatcher.register(MODES.ADD_LINK, [], ['link', 'name'])
-def add_link(link=None, name=None):
+@url_dispatcher.register(MODES.ADD_LINK, [], ['link', 'name', 'refresh'])
+def add_link(link=None, name=None, refresh=True):
     if link is None:
         result = prompt_for_link()
     else:
@@ -77,7 +77,9 @@ def add_link(link=None, name=None):
             if not line.endswith('\n'):
                 line += '\n'
             f.write(line)
-        xbmc.executebuiltin("XBMC.Container.Refresh")
+        
+        if refresh:
+            xbmc.executebuiltin("XBMC.Container.Refresh")
 
 @url_dispatcher.register(MODES.SETTINGS)
 def urlresolver_settings():
