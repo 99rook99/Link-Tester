@@ -37,8 +37,8 @@ url_dispatcher = URL_Dispatcher()
 
 @url_dispatcher.register(MODES.MAIN)
 def main_menu():
-    kodi.create_item({'mode': MODES.ADD_LINK}, 'Add Link')
-    kodi.create_item({'mode': MODES.SETTINGS}, 'URLResolver Settings')
+    kodi.create_item({'mode': MODES.ADD_LINK}, 'Add Link', is_folder=False, is_playable=False)
+    kodi.create_item({'mode': MODES.SETTINGS}, 'URLResolver Settings', is_folder=False, is_playable=False)
     if os.path.exists(LINK_PATH):
         with open(LINK_PATH) as f:
             for i, line in enumerate(f):
