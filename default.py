@@ -16,19 +16,18 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import urlresolver
-import xbmc
 import xbmcgui
 import xbmcplugin
 import sys
 import os.path
-from local_lib.url_dispatcher import URL_Dispatcher
-from local_lib import log_utils
-from local_lib import kodi
+from url_dispatcher import URL_Dispatcher
+import log_utils
+import kodi
 
 def __enum(**enums):
     return type('Enum', (), enums)
 
-LINK_PATH = os.path.join(xbmc.translatePath(kodi.get_profile()), 'links.txt')
+LINK_PATH = os.path.join(kodi.translate_path(kodi.get_profile()), 'links.txt')
 MODES = __enum(
     MAIN='main', ADD_LINK='add_link', PLAY_LINK='play_link', DELETE_LINK='delete_link', SETTINGS='settings', EDIT_LINK='edit_link'
 )
@@ -79,7 +78,7 @@ def add_link(link=None, name=None, refresh=True):
             f.write(line)
         
         if refresh:
-            xbmc.executebuiltin("XBMC.Container.Refresh")
+            kodi.refresh_container()
 
 @url_dispatcher.register(MODES.SETTINGS)
 def urlresolver_settings():
@@ -98,7 +97,7 @@ def delete_link(index):
         for line in new_lines:
             f.write(line)
 
-    xbmc.executebuiltin("XBMC.Container.Refresh")
+    kodi.refresh_container()
 
 @url_dispatcher.register(MODES.EDIT_LINK, ['index'])
 def edit_link(index):
@@ -120,7 +119,7 @@ def edit_link(index):
                 
             f.write(line)
 
-    xbmc.executebuiltin("XBMC.Container.Refresh")
+    kodi.refresh_container()
 
 def prompt_for_link(old_link='', old_name=''):
     if old_link.endswith('\n'): old_link = old_link[:-1]
