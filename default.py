@@ -19,7 +19,8 @@ import urlresolver
 import xbmcgui
 import xbmcplugin
 import sys
-import os.path
+import os
+import shutil
 from url_dispatcher import URL_Dispatcher
 import log_utils
 import kodi
@@ -27,38 +28,87 @@ import kodi
 def __enum(**enums):
     return type('Enum', (), enums)
 
-LINK_PATH = os.path.join(kodi.translate_path(kodi.get_profile()), 'links.txt')
+LINK_PATH = os.path.join(kodi.translate_path(kodi.get_profile()), 'links')
+LINK_FILE = 'links.txt'
+if not os.path.exists(LINK_PATH):
+    os.mkdir(LINK_PATH)
+    
 MODES = __enum(
-    MAIN='main', ADD_LINK='add_link', PLAY_LINK='play_link', DELETE_LINK='delete_link', SETTINGS='settings', EDIT_LINK='edit_link'
+    MAIN='main', ADD_LINK='add_link', PLAY_LINK='play_link', DELETE_LINK='delete_link', SETTINGS='settings', EDIT_LINK='edit_link', OPEN_DIR='open_dir',
+    CREATE_DIR='create_dir', DELETE_DIR='delete_dir', RENAME_DIR='rename_dir'
 )
 
 url_dispatcher = URL_Dispatcher()
 
 @url_dispatcher.register(MODES.MAIN)
 def main_menu():
-    kodi.create_item({'mode': MODES.ADD_LINK}, 'Add Link', is_folder=False, is_playable=False)
+    open_dir(LINK_PATH)
+
+@url_dispatcher.register(MODES.OPEN_DIR, ['path'])
+def open_dir(path):
+    kodi.create_item({'mode': MODES.CREATE_DIR, 'path': path}, 'Create Directory ', is_folder=False, is_playable=False)
+    kodi.create_item({'mode': MODES.ADD_LINK, 'path': path}, 'Add Link', is_folder=False, is_playable=False)
     kodi.create_item({'mode': MODES.SETTINGS}, 'URLResolver Settings', is_folder=False, is_playable=False)
-    if os.path.exists(LINK_PATH):
-        with open(LINK_PATH) as f:
+    path, dirs, files = get_directory(path)
+    for dir_name in sorted(dirs):
+        make_directory(path, dir_name)
+    
+    if LINK_FILE in files:
+        link_file = os.path.join(path, LINK_FILE)
+        with open(link_file) as f:
             for i, line in enumerate(f):
                 item = line.split('|')
                 link = item[0].strip()
                 if not link: continue
-                try:
-                    label = item[1]
-                except:
-                    label = item[0]
-                queries = {'mode': MODES.DELETE_LINK, 'index': i}
-                menu_items = [('Delete Link', 'RunPlugin(%s)' % (kodi.get_plugin_url(queries))), ]
-                queries = {'mode': MODES.EDIT_LINK, 'index': i}
-                menu_items.append(('Edit Link', 'RunPlugin(%s)' % (kodi.get_plugin_url(queries))),)
-                kodi.create_item({'mode': MODES.PLAY_LINK, 'link': link}, label, is_folder=False, is_playable=True, menu_items=menu_items)
+                try: label = item[1]
+                except: label = item[0]
+                make_link(i, link, label, path)
     
     kodi.set_content('files')
     kodi.end_of_directory(cache_to_disc=False)
+    
+@url_dispatcher.register(MODES.CREATE_DIR, ['path'], ['dir_name'])
+def create_dir(path, dir_name=None):
+    if dir_name is None:
+        dir_name = kodi.get_keyboard('Enter Directory Name')
+        if dir_name is None:
+            return
+    
+    try:
+        os.mkdir(os.path.join(path, dir_name))
+    except OSError as e:
+        kodi.notify(msg=e.strerror)
+    kodi.refresh_container()
 
-@url_dispatcher.register(MODES.ADD_LINK, [], ['link', 'name', 'refresh'])
-def add_link(link=None, name=None, refresh=True):
+@url_dispatcher.register(MODES.DELETE_DIR, ['path', 'dir_name'])
+def delete_dir(path, dir_name):
+    path = os.path.join(path, dir_name)
+    try:
+        os.rmdir(path)
+    except OSError:
+        delete = xbmcgui.Dialog().yesno('Directory Not Empty', 'Delete it?', nolabel='No', yeslabel='Yes')
+        if delete:
+            shutil.rmtree(path)
+            kodi.refresh_container()
+    
+@url_dispatcher.register(MODES.RENAME_DIR, ['path', 'dir_name'], ['new_name'])
+def rename_dir(path, dir_name, new_name=None):
+    if new_name is None:
+        new_name = kodi.get_keyboard('Enter Directory Name', dir_name)
+        if new_name is None:
+            return
+    
+    old_path = os.path.join(path, dir_name)
+    new_path = os.path.join(path, new_name)
+    try:
+        os.rename(old_path, new_path)
+    except OSError as e:
+        kodi.notify(msg=e.strerror)
+    kodi.refresh_container()
+
+@url_dispatcher.register(MODES.ADD_LINK, kwargs=['link', 'name', 'refresh', 'path'])
+def add_link(link=None, name=None, refresh=True, path=None):
+    if path is None: path = LINK_PATH
     if link is None:
         result = prompt_for_link()
     else:
@@ -68,10 +118,11 @@ def add_link(link=None, name=None, refresh=True):
             result = (link, name)
             
     if result:
-        if not os.path.exists(os.path.dirname(LINK_PATH)):
-            os.mkdir(os.path.dirname(LINK_PATH))
+        if not os.path.exists(os.path.dirname(path)):
+            os.mkdir(os.path.dirname(path))
             
-        with open(LINK_PATH, 'a') as f:
+        path = os.path.join(path, LINK_FILE)
+        with open(path, 'a') as f:
             line = '|'.join(result)
             if not line.endswith('\n'):
                 line += '\n'
@@ -84,25 +135,24 @@ def add_link(link=None, name=None, refresh=True):
 def urlresolver_settings():
     urlresolver.display_settings()
     
-@url_dispatcher.register(MODES.DELETE_LINK, ['index'])
-def delete_link(index):
+@url_dispatcher.register(MODES.DELETE_LINK, ['index', 'path'])
+def delete_link(index, path):
+    path = os.path.join(path, LINK_FILE)
     new_lines = []
-    with open(LINK_PATH) as f:
+    with open(path) as f:
         for i, line in enumerate(f):
             if i == int(index):
                 continue
             new_lines.append(line)
             
-    with open(LINK_PATH, 'w') as f:
-        for line in new_lines:
-            f.write(line)
-
+    write_links(path, new_lines)
     kodi.refresh_container()
 
-@url_dispatcher.register(MODES.EDIT_LINK, ['index'])
-def edit_link(index):
+@url_dispatcher.register(MODES.EDIT_LINK, ['index', 'path'])
+def edit_link(index, path):
+    path = os.path.join(path, LINK_FILE)
     new_lines = []
-    with open(LINK_PATH) as f:
+    with open(path) as f:
         for i, line in enumerate(f):
             if i == int(index):
                 item = line.split('|')
@@ -111,32 +161,10 @@ def edit_link(index):
                     line = '|'.join(result)
                 
             new_lines.append(line)
-
-    with open(LINK_PATH, 'w') as f:
-        for line in new_lines:
-            if not line.endswith('\n'):
-                line += '\n'
-                
-            f.write(line)
-
+    
+    write_links(path, new_lines)
     kodi.refresh_container()
 
-def prompt_for_link(old_link='', old_name=''):
-    if old_link.endswith('\n'): old_link = old_link[:-1]
-    if old_name.endswith('\n'): old_name = old_name[:-1]
-    new_link = kodi.get_keyboard('Edit Link', old_link)
-    if new_link is None:
-        return
-
-    new_name = kodi.get_keyboard('Enter Name', old_name)
-    if new_name is None:
-        return
-    
-    if new_name:
-        return (new_link, new_name)
-    else:
-        return (new_link, )
-    
 @url_dispatcher.register(MODES.PLAY_LINK, ['link'])
 def play_link(link):
     log_utils.log('Playing Link: |%s|' % (link), log_utils.LOGDEBUG)
@@ -163,6 +191,51 @@ def play_link(link):
         
     listitem = xbmcgui.ListItem(path=stream_url)
     xbmcplugin.setResolvedUrl(int(sys.argv[1]), True, listitem)
+
+def write_links(path, links):
+    with open(path, 'w') as f:
+        for line in links:
+            if not line.endswith('\n'):
+                line += '\n'
+                
+            f.write(line)
+    
+def prompt_for_link(old_link='', old_name=''):
+    if old_link.endswith('\n'): old_link = old_link[:-1]
+    if old_name.endswith('\n'): old_name = old_name[:-1]
+    new_link = kodi.get_keyboard('Edit Link', old_link)
+    if new_link is None:
+        return
+
+    new_name = kodi.get_keyboard('Enter Name', old_name)
+    if new_name is None:
+        return
+    
+    if new_name:
+        return (new_link, new_name)
+    else:
+        return (new_link, )
+    
+def make_directory(path, dir_name):
+    menu_items = []
+    queries = {'mode': MODES.DELETE_DIR, 'path': path, 'dir_name': dir_name}
+    menu_items.append(('Delete Directory', 'RunPlugin(%s)' % (kodi.get_plugin_url(queries))),)
+    queries = {'mode': MODES.RENAME_DIR, 'path': path, 'dir_name': dir_name}
+    menu_items.append(('Rename Directory', 'RunPlugin(%s)' % (kodi.get_plugin_url(queries))),)
+    path = os.path.join(path, dir_name)
+    kodi.create_item({'mode': MODES.OPEN_DIR, 'path': path}, dir_name, is_folder=True, menu_items=menu_items)
+
+def make_link(index, link, label, path):
+    menu_items = []
+    queries = {'mode': MODES.DELETE_LINK, 'index': index, 'path': path}
+    menu_items.append(('Delete Link', 'RunPlugin(%s)' % (kodi.get_plugin_url(queries))),)
+    queries = {'mode': MODES.EDIT_LINK, 'index': index, 'path': path}
+    menu_items.append(('Edit Link', 'RunPlugin(%s)' % (kodi.get_plugin_url(queries))),)
+    kodi.create_item({'mode': MODES.PLAY_LINK, 'link': link}, label, is_folder=False, is_playable=True, menu_items=menu_items)
+    
+def get_directory(path):
+    try: return next(os.walk(path))
+    except: return (path, [], [])
 
 def main(argv=None):
     if sys.argv: argv = sys.argv
