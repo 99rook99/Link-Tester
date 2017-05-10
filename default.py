@@ -25,6 +25,8 @@ from url_dispatcher import URL_Dispatcher
 import log_utils
 import kodi
 
+logger = log_utils.Logger.get_logger()
+
 def __enum(**enums):
     return type('Enum', (), enums)
 
@@ -167,13 +169,13 @@ def edit_link(index, path):
 
 @url_dispatcher.register(MODES.PLAY_LINK, ['link'])
 def play_link(link):
-    log_utils.log('Playing Link: |%s|' % (link), log_utils.LOGDEBUG)
+    logger.log('Playing Link: |%s|' % (link), log_utils.LOGDEBUG)
     hmf = urlresolver.HostedMediaFile(url=link)
     if not hmf:
-        log_utils.log('Indirect hoster_url not supported by urlresolver: %s' % (link))
+        logger.log('Indirect hoster_url not supported by urlresolver: %s' % (link))
         kodi.notify('Link Not Supported: %s' % (link), duration=7500)
         return False
-    log_utils.log('Link Supported: |%s|' % (link), log_utils.LOGDEBUG)
+    logger.log('Link Supported: |%s|' % (link), log_utils.LOGDEBUG)
 
     try:
         stream_url = hmf.resolve()
@@ -187,7 +189,7 @@ def play_link(link):
         kodi.notify('Resolve Failed: %s' % (msg), duration=7500)
         return False
         
-    log_utils.log('Link Resolved: |%s|%s|' % (link, stream_url), log_utils.LOGDEBUG)
+    logger.log('Link Resolved: |%s|%s|' % (link, stream_url), log_utils.LOGDEBUG)
         
     listitem = xbmcgui.ListItem(path=stream_url)
     xbmcplugin.setResolvedUrl(int(sys.argv[1]), True, listitem)
@@ -240,8 +242,8 @@ def get_directory(path):
 def main(argv=None):
     if sys.argv: argv = sys.argv
     queries = kodi.parse_query(sys.argv[2])
-    log_utils.log('Version: |%s| Queries: |%s|' % (kodi.get_version(), queries))
-    log_utils.log('Args: |%s|' % (argv))
+    logger.log('Version: |%s| Queries: |%s|' % (kodi.get_version(), queries))
+    logger.log('Args: |%s|' % (argv))
 
     # don't process params that don't match our url exactly. (e.g. plugin://plugin.video.1channel/extrafanart)
     plugin_url = 'plugin://%s/' % (kodi.get_id())
